@@ -11,11 +11,13 @@ from typing import Any
 from aiohttp import ClientError
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 DOMAIN = "pzu_opcom"
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 TIME_ZONE = "Europe/Bucharest"
 SCAN_INTERVAL = timedelta(minutes=30)
 SOURCE_URL = "https://www.opcom.ro/grafice-ip-raportPIP-si-volumTranzactionat/ro"
