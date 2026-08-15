@@ -1,12 +1,12 @@
 {
   "domain": "pzu_opcom",
   "name": "PZU OPCOM",
-  "version": "1.0.0",
-  "documentation": "https://github.com/andrexyx/pzu-opcom-home-assistant",
-  "issue_tracker": "https://github.com/andrexyx/pzu-opcom-home-assistant/issues",
   "codeowners": ["@andrexyx"],
   "config_flow": false,
+  "documentation": "https://github.com/andrexyx/pzu-opcom-home-assistant",
   "import_executor": true,
   "integration_type": "service",
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/andrexyx/pzu-opcom-home-assistant/issues",
+  "version": "1.0.1"
 }
