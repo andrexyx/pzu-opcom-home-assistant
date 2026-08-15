@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PZU OPCOM",
+        "description": "Configurează prețurile oficiale din Piața pentru Ziua Următoare OPCOM. Nu sunt necesare credențiale."
+      }
+    },
+    "abort": {
+      "already_configured": "PZU OPCOM este deja configurată."
+    }
+  }
+}
