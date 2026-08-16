@@ -1,4 +1,4 @@
-<p align="center"><img src="brand/icon.png" alt="PZU OPCOM" width="180"></p>
+<p align="center"><img src="custom_components/pzu_opcom/icon.png" alt="PZU OPCOM" width="180"></p>
 
 # PZU OPCOM for Home Assistant
 
