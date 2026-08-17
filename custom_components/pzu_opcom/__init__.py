@@ -1,4 +1,4 @@
- """PZU OPCOM prices exposed as stable Home Assistant states."""
+"""PZU OPCOM prices exposed as stable Home Assistant states."""
 from __future__ import annotations
 
 import asyncio
