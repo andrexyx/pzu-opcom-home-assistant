@@ -6,6 +6,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import (
@@ -24,6 +25,18 @@ async def async_setup_entry(
 ) -> None:
     """Set up PZU OPCOM sensors."""
     runtime: PzuRuntime = hass.data[DOMAIN]
+
+    registry = er.async_get(hass)
+    for desired_entity_id in ENTITY_NAMES:
+        unique_id = desired_entity_id.split(".", 1)[1]
+        current_entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, unique_id
+        )
+        if current_entity_id and current_entity_id != desired_entity_id:
+            registry.async_update_entity(
+                current_entity_id, new_entity_id=desired_entity_id
+            )
+
     entities = [
         PzuSensor(runtime, entity_id)
         for entity_id in ENTITY_NAMES
@@ -40,7 +53,9 @@ class PzuSensor(SensorEntity):
     def __init__(self, runtime: PzuRuntime, entity_id: str) -> None:
         self.runtime = runtime
         self.entity_key = entity_id
-        self._attr_unique_id = entity_id.split(".", 1)[1]
+        object_id = entity_id.split(".", 1)[1]
+        self._attr_unique_id = object_id
+        self._attr_suggested_object_id = object_id
         self._attr_name = ENTITY_NAMES[entity_id]
         self._attr_icon = ENTITY_ICONS[entity_id]
 

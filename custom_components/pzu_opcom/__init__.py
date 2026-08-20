@@ -553,11 +553,11 @@ class PzuRuntime:
         }
 
         values = {
-            "sensor.pzu_pret_curent": current,
-            "sensor.pzu_pret_ora_urmatoare": following,
-            "sensor.pzu_pret_minim_azi": minimum,
-            "sensor.pzu_pret_maxim_azi": maximum,
-            "sensor.pzu_pret_mediu_azi": average,
+            "sensor.pzu_pret_curent": round(current, 4),
+            "sensor.pzu_pret_ora_urmatoare": round(following, 4),
+            "sensor.pzu_pret_minim_azi": round(minimum, 4),
+            "sensor.pzu_pret_maxim_azi": round(maximum, 4),
+            "sensor.pzu_pret_mediu_azi": round(average, 4),
         }
 
         for (
@@ -598,11 +598,11 @@ class PzuRuntime:
                 ),
                 "prag_incarcare": round(
                     charge,
-                    6,
+                    4,
                 ),
                 "prag_vanzare": round(
                     sell,
-                    6,
+                    4,
                 ),
             }
 
