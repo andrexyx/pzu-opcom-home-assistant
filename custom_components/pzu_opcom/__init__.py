@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import csv
 from datetime import date, datetime, timedelta
-from html.parser import HTMLParser
 from io import StringIO
 import logging
 from statistics import fmean
@@ -209,72 +208,6 @@ def _parse_csv(payload: str) -> list[float]:
     ]
 
 
-class _OpcomTableParser(HTMLParser):
-    """Collect rows and cells from OPCOM HTML tables."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.tables: list[list[list[str]]] = []
-        self._table: list[list[str]] | None = None
-        self._row: list[str] | None = None
-        self._cell: list[str] | None = None
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag == "table":
-            self._table = []
-        elif tag == "tr" and self._table is not None:
-            self._row = []
-        elif tag in ("td", "th") and self._row is not None:
-            self._cell = []
-
-    def handle_data(self, data: str) -> None:
-        if self._cell is not None:
-            self._cell.append(data)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in ("td", "th") and self._cell is not None:
-            assert self._row is not None
-            self._row.append(" ".join(self._cell).strip())
-            self._cell = None
-        elif tag == "tr" and self._row is not None:
-            assert self._table is not None
-            if any(self._row):
-                self._table.append(self._row)
-            self._row = None
-        elif tag == "table" and self._table is not None:
-            if self._table:
-                self.tables.append(self._table)
-            self._table = None
-
-
-def _parse_html_60min(payload: str) -> list[float]:
-    """Extract the official 60-minute price table from the OPCOM page."""
-    parser = _OpcomTableParser()
-    parser.feed(payload)
-
-    for table in parser.tables:
-        header = " ".join(cell for row in table[:2] for cell in row).casefold()
-        if "pret mediu 60 min" not in header and "preț mediu 60 min" not in header:
-            continue
-
-        prices: list[float] = []
-        for row in table:
-            if len(row) < 2:
-                continue
-            try:
-                interval = int(row[0].strip())
-                price = _decimal(row[1])
-            except ValueError:
-                continue
-            if interval == len(prices) + 1:
-                prices.append(price / 1000.0)
-
-        if len(prices) in (23, 24, 25):
-            return prices
-
-    raise ValueError("OPCOM 60-minute price table was not found")
-
-
 class PzuRuntime:
     """Fetch OPCOM prices and publish stable HA states."""
 
@@ -308,10 +241,6 @@ class PzuRuntime:
                 SOURCE_URL,
                 headers=WARMUP_HEADERS,
                 timeout=REQUEST_TIMEOUT,
-                # OPCOM currently serves an incomplete TLS certificate chain.
-                # This endpoint is public and carries no credentials; limit the
-                # workaround to OPCOM requests instead of changing HA globally.
-                ssl=False,
             ) as response:
                 await response.read()
 
@@ -355,7 +284,6 @@ class PzuRuntime:
                     url,
                     headers=BROWSER_HEADERS,
                     timeout=REQUEST_TIMEOUT,
-                    ssl=False,
                 ) as response:
 
                     if (
@@ -414,30 +342,6 @@ class PzuRuntime:
                 )
 
                 await asyncio.sleep(delay)
-
-        # OPCOM occasionally blocks or changes the CSV export while the public
-        # results page remains available. For the current market day, use its
-        # official 60-minute table as a resilient fallback.
-        if target == _market_now().date():
-            try:
-                async with self.session.get(
-                    SOURCE_URL,
-                    headers=WARMUP_HEADERS,
-                    timeout=REQUEST_TIMEOUT,
-                    ssl=False,
-                ) as response:
-                    response.raise_for_status()
-                    page = await response.text(errors="replace")
-                prices = _parse_html_60min(page)
-                _LOGGER.info("Using OPCOM HTML 60-minute table fallback")
-                return prices
-            except (ClientError, TimeoutError, ValueError) as fallback_error:
-                if last_error is not None:
-                    raise ValueError(
-                        f"CSV failed: {last_error}; HTML fallback failed: "
-                        f"{fallback_error}"
-                    ) from fallback_error
-                raise
 
         if last_error is not None:
             raise last_error
@@ -649,11 +553,11 @@ class PzuRuntime:
         }
 
         values = {
-            "sensor.pzu_pret_curent": round(current, 4),
-            "sensor.pzu_pret_ora_urmatoare": round(following, 4),
-            "sensor.pzu_pret_minim_azi": round(minimum, 4),
-            "sensor.pzu_pret_maxim_azi": round(maximum, 4),
-            "sensor.pzu_pret_mediu_azi": round(average, 4),
+            "sensor.pzu_pret_curent": current,
+            "sensor.pzu_pret_ora_urmatoare": following,
+            "sensor.pzu_pret_minim_azi": minimum,
+            "sensor.pzu_pret_maxim_azi": maximum,
+            "sensor.pzu_pret_mediu_azi": average,
         }
 
         for (
@@ -694,11 +598,11 @@ class PzuRuntime:
                 ),
                 "prag_incarcare": round(
                     charge,
-                    4,
+                    6,
                 ),
                 "prag_vanzare": round(
                     sell,
-                    4,
+                    6,
                 ),
             }
 
