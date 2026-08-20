@@ -117,6 +117,13 @@ Sursa datelor: [OPCOM – Rezultate PZU RO](https://www.opcom.ro/grafice-ip-rapo
 
 Actualizările se instalează din **HACS → PZU OPCOM → Update**. După actualizare, repornește Home Assistant.
 
+## Autori și contribuții
+
+- [@andrexyx](https://github.com/andrexyx) — autor și maintainer
+- [@adelinchristian](https://github.com/adelinchristian) — colaborator; configurare GUI și asocierea entităților cu device-ul
+
+Mulțumiri tuturor celor care testează integrarea și contribuie cu feedback.
+
 ## Licență
 
 Distribuit sub licența [MIT](LICENSE).
