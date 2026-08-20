@@ -10,15 +10,12 @@ from statistics import fmean
 from typing import Any
 
 from aiohttp import ClientError, ClientResponseError, CookieJar
-from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 DOMAIN = "pzu_opcom"
-CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 TIME_ZONE = "Europe/Bucharest"
 SCAN_INTERVAL = timedelta(minutes=30)
@@ -216,11 +213,13 @@ class PzuRuntime:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
-
         self.cache: dict[
             str,
             list[float],
         ] = {}
+        self.values: dict[str, Any] = {}
+        self.attributes: dict[str, dict[str, Any]] = {}
+        self.entities: list[Any] = []
 
         self.session = async_create_clientsession(
             hass,
@@ -386,17 +385,19 @@ class PzuRuntime:
         )
 
         for entity_id, name in ENTITY_NAMES.items():
-            self.hass.states.async_set(
-                entity_id,
-                STATE_UNAVAILABLE,
-                {
-                    **attrs,
-                    "friendly_name": name,
-                    "icon": ENTITY_ICONS[
-                        entity_id
-                    ],
-                },
-            )
+            self.values[entity_id] = None
+            self.attributes[entity_id] = {
+                **attrs,
+                "friendly_name": name,
+                "icon": ENTITY_ICONS[entity_id],
+            }
+
+        self.async_notify_entities()
+
+    def async_notify_entities(self) -> None:
+        """Notify native sensor entities that new values are available."""
+        for entity in self.entities:
+            entity.schedule_update_ha_state()
 
     async def async_update(
         self,
@@ -578,23 +579,12 @@ class PzuRuntime:
                 ),
             }
 
-            self.hass.states.async_set(
-                entity_id,
-                (
-                    round(
-                        value,
-                        6,
-                    )
-                    if value is not None
-                    else STATE_UNAVAILABLE
-                ),
-                attributes,
-            )
+            self.values[entity_id] = value
+            self.attributes[entity_id] = attributes
 
-        self.hass.states.async_set(
-            "sensor.pzu_strategie_baterie",
-            strategy,
-            {
+        strategy_entity_id = "sensor.pzu_strategie_baterie"
+        self.values[strategy_entity_id] = strategy
+        self.attributes[strategy_entity_id] = {
                 **base,
                 "friendly_name": (
                     ENTITY_NAMES[
@@ -614,15 +604,33 @@ class PzuRuntime:
                     sell,
                     6,
                 ),
-            },
-        )
+            }
+
+        self.async_notify_entities()
 
 
-async def async_setup(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: dict[str, Any],
+    entry: Any,
 ) -> bool:
-    """Set up PZU OPCOM integration."""
+    """Set up PZU OPCOM from a config entry."""
+
+    await _async_setup_runtime(hass)
+
+    await hass.config_entries.async_forward_entry_setups(
+        entry,
+        ["sensor"],
+    )
+    return True
+
+
+async def _async_setup_runtime(
+    hass: HomeAssistant,
+) -> bool:
+    """Create the shared runtime and start its update interval."""
+
+    if DOMAIN in hass.data:
+        return True
 
     runtime = PzuRuntime(hass)
 

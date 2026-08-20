@@ -11,28 +11,19 @@ Integrare locală care citește exportul CSV oficial OPCOM pentru PZU și expune
 1. HACS → Integrations → Custom repositories.
 2. Adaugă `https://github.com/andrexyx/pzu-opcom-home-assistant` cu tipul `Integration`.
 3. Instalează **PZU OPCOM**.
-4. Adaugă în `configuration.yaml`:
-
-   ```yaml
-   pzu_opcom:
-   ```
-
-5. Verifică configurația și repornește Home Assistant.
+4. Mergi la **Settings → Devices & services → Add Integration** și caută
+  **PZU OPCOM**.
+5. Confirmă configurarea; nu sunt necesare credențiale.
 
 ### Manual
 
 1. Copiază `custom_components/pzu_opcom` în `/config/custom_components/`.
-2. Adaugă în `configuration.yaml`:
+2. Mergi la **Settings → Devices & services → Add Integration** și caută
+  **PZU OPCOM**.
+3. Confirmă configurarea; nu sunt necesare credențiale.
 
-   ```yaml
-   pzu_opcom:
-   ```
-
-3. Rulează `ha core check` și repornește Home Assistant.
-
-Integrarea este configurată intenționat prin YAML și nu creează o intrare în
-**Settings → Devices & services**. Această abordare evită o incompatibilitate de
-încărcare a fluxurilor UI întâlnită în Home Assistant 2026.8.
+Configurarea prin interfața Home Assistant este necesară. Dacă ai avut anterior
+`pzu_opcom:` în `configuration.yaml`, șterge acea secțiune înainte de repornire.
 
 ## Entități
 

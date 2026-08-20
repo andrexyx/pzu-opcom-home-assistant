@@ -2,11 +2,11 @@
   "domain": "pzu_opcom",
   "name": "PZU OPCOM",
   "codeowners": ["@andrexyx"],
-  "config_flow": false,
+  "config_flow": true,
   "documentation": "https://github.com/andrexyx/pzu-opcom-home-assistant",
   "import_executor": true,
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/andrexyx/pzu-opcom-home-assistant/issues",
-  "version": "1.0.2"
+  "version": "1.0.3"
 }
