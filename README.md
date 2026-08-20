@@ -22,8 +22,8 @@ Integrare locală care citește exportul CSV oficial OPCOM pentru PZU și expune
   **PZU OPCOM**.
 3. Confirmă configurarea; nu sunt necesare credențiale.
 
-Configurarea prin interfața Home Assistant este metoda recomandată. Configurațiile
-YAML existente cu `pzu_opcom:` rămân compatibile.
+Configurarea prin interfața Home Assistant este necesară. Dacă ai avut anterior
+`pzu_opcom:` în `configuration.yaml`, șterge acea secțiune înainte de repornire.
 
 ## Entități
 
