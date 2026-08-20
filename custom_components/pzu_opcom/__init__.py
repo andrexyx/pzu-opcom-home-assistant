@@ -624,6 +624,24 @@ async def async_setup(
 ) -> bool:
     """Set up PZU OPCOM integration."""
 
+    return await _async_setup_runtime(hass)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    _entry: Any,
+) -> bool:
+    """Set up PZU OPCOM from a config entry."""
+
+    return await _async_setup_runtime(hass)
+
+
+async def _async_setup_runtime(hass: HomeAssistant) -> bool:
+    """Create the shared runtime and start its update interval."""
+
+    if DOMAIN in hass.data:
+        return True
+
     runtime = PzuRuntime(hass)
 
     hass.data[DOMAIN] = runtime

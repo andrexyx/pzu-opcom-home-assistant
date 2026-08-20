@@ -2,7 +2,7 @@
   "domain": "pzu_opcom",
   "name": "PZU OPCOM",
   "codeowners": ["@andrexyx"],
-  "config_flow": false,
+  "config_flow": true,
   "documentation": "https://github.com/andrexyx/pzu-opcom-home-assistant",
   "import_executor": true,
   "integration_type": "service",
