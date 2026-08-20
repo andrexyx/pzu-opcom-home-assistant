@@ -64,6 +64,8 @@ Integrarea citește exportul CSV oficial OPCOM pentru PZU, convertește automat 
 
 Senzorul de strategie expune și atributele `prag_incarcare` și `prag_vanzare`. Toate entitățile sunt asociate device-ului **PZU OPCOM**.
 
+Valorile numerice și pragurile sunt publicate cu maximum 4 zecimale. Versiunea 1.1.1 migrează automat ID-urile generate anterior cu prefix duplicat (`sensor.pzu_opcom_pzu_*`) la ID-urile stabile `sensor.pzu_*` din tabelul de mai sus.
+
 ## Card Lovelace
 
 ```yaml
