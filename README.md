@@ -1,55 +1,77 @@
-<p align="center"><img src="custom_components/pzu_opcom/brand/icon.png" alt="PZU OPCOM" width="180"></p>
+<p align="center">
+  <img src="custom_components/pzu_opcom/brand/logo.png" alt="PZU OPCOM" width="420">
+</p>
 
-# PZU OPCOM for Home Assistant
+<p align="center">
+  <img src="custom_components/pzu_opcom/brand/icon.png" alt="PZU OPCOM icon" width="96">
+</p>
 
-Integrare locală care citește exportul CSV oficial OPCOM pentru PZU și expune prețurile în `RON/kWh`. Poate fi instalată prin HACS ca repository personalizat sau manual, fără alte integrări externe.
+<h1 align="center">PZU OPCOM pentru Home Assistant</h1>
 
-## Instalare
+<p align="center">
+  Prețurile oficiale din Piața pentru Ziua Următoare, direct în Home Assistant.
+</p>
 
-### HACS (custom repository)
+<p align="center">
+  <img alt="HACS custom" src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg">
+  <img alt="Home Assistant" src="https://img.shields.io/badge/Home%20Assistant-Integration-18BCF2.svg">
+  <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-green.svg">
+</p>
 
-1. HACS → Integrations → Custom repositories.
-2. Adaugă `https://github.com/andrexyx/pzu-opcom-home-assistant` cu tipul `Integration`.
-3. Instalează **PZU OPCOM**.
-4. Mergi la **Settings → Devices & services → Add Integration** și caută
-  **PZU OPCOM**.
-5. Confirmă configurarea; nu sunt necesare credențiale.
+Integrarea citește exportul CSV oficial OPCOM pentru PZU, convertește automat prețurile din lei/MWh în **RON/kWh** și creează un device unic **PZU OPCOM**, împreună cu senzorii necesari pentru monitorizare și strategia bateriei.
 
-### Manual
+## Funcționalități
 
-1. Copiază `custom_components/pzu_opcom` în `/config/custom_components/`.
-2. Mergi la **Settings → Devices & services → Add Integration** și caută
-  **PZU OPCOM**.
-3. Confirmă configurarea; nu sunt necesare credențiale.
+- configurare completă din interfața Home Assistant, fără credențiale;
+- un device unic care grupează toate entitățile PZU OPCOM;
+- preț curent, prețul orei următoare și statistici zilnice;
+- strategie de încărcare, așteptare sau vânzare/descărcare a bateriei;
+- actualizare automată la fiecare 30 de minute;
+- păstrarea ultimei citiri valide în cazul erorilor temporare de rețea;
+- instalare prin HACS sau manual.
 
-Configurarea prin interfața Home Assistant este necesară. Dacă ai avut anterior
-`pzu_opcom:` în `configuration.yaml`, șterge acea secțiune înainte de repornire.
+## Instalare prin HACS
+
+1. Deschide **HACS → Integrations**.
+2. Din meniul din dreapta sus alege **Custom repositories**.
+3. Adaugă:
+   `https://github.com/andrexyx/pzu-opcom-home-assistant`
+4. Selectează categoria **Integration** și instalează **PZU OPCOM**.
+5. Repornește Home Assistant.
+6. Mergi la **Settings → Devices & services → Add Integration**.
+7. Caută **PZU OPCOM** și confirmă configurarea.
+
+## Instalare manuală
+
+1. Copiază folderul `custom_components/pzu_opcom` în `/config/custom_components/`.
+2. Repornește Home Assistant.
+3. Mergi la **Settings → Devices & services → Add Integration**.
+4. Caută **PZU OPCOM** și confirmă configurarea.
+
+> [!IMPORTANT]
+> Configurarea din interfața Home Assistant este obligatorie. Dacă ai folosit o versiune veche și ai `pzu_opcom:` în `configuration.yaml`, elimină acea secțiune înainte de repornire.
 
 ## Entități
 
-- `sensor.pzu_pret_curent`
-- `sensor.pzu_pret_ora_urmatoare`
-- `sensor.pzu_pret_minim_azi`
-- `sensor.pzu_pret_maxim_azi`
-- `sensor.pzu_pret_mediu_azi`
-- `sensor.pzu_strategie_baterie`
+| Entitate | Rol |
+|---|---|
+| `sensor.pzu_pret_curent` | Prețul intervalului curent |
+| `sensor.pzu_pret_ora_urmatoare` | Prețul următorului interval |
+| `sensor.pzu_pret_minim_azi` | Prețul minim al zilei |
+| `sensor.pzu_pret_maxim_azi` | Prețul maxim al zilei |
+| `sensor.pzu_pret_mediu_azi` | Prețul mediu al zilei |
+| `sensor.pzu_strategie_baterie` | Recomandarea pentru baterie |
 
-Senzorul de strategie oferă atributele `prag_incarcare` și `prag_vanzare`. Erorile de rețea nu sunt convertite în prețul `0`; ultima citire validă este păstrată, iar fără date valide entitățile devin indisponibile.
+Senzorul de strategie expune și atributele `prag_incarcare` și `prag_vanzare`. Toate entitățile sunt asociate device-ului **PZU OPCOM**.
 
-Datele sunt actualizate la fiecare 30 de minute în fusul orar
-`Europe/Bucharest`. Exportul OPCOM este în lei/MWh și este convertit automat în
-RON/kWh prin împărțire la 1000.
-
-Sursa oficială: [OPCOM – Rezultate PZU RO](https://www.opcom.ro/grafice-ip-raportPIP-si-volumTranzactionat/ro).
-
-## Card Lovelace compatibil
+## Card Lovelace
 
 ```yaml
 type: vertical-stack
 cards:
   - type: tile
     entity: sensor.pzu_strategie_baterie
-    name: Strategie Baterie
+    name: Strategie baterie
     icon: mdi:battery-sync
     color: blue
     state_content:
@@ -60,35 +82,41 @@ cards:
     cards:
       - type: tile
         entity: sensor.pzu_pret_curent
-        name: Preț Curent
-        icon: mdi:currency-eur
+        name: Preț curent
+        icon: mdi:cash-clock
         color: amber
       - type: tile
         entity: sensor.pzu_pret_ora_urmatoare
-        name: Ora Următoare
+        name: Ora următoare
         icon: mdi:clock-outline
         color: orange
   - type: entities
-    title: Statistici & Praguri PZU
+    title: Statistici și praguri PZU
     show_header_toggle: false
     entities:
-      - entity: sensor.pzu_pret_minim_azi
-        name: Preț Minim Azi
-        icon: mdi:arrow-down-bold-circle-outline
-      - entity: sensor.pzu_pret_maxim_azi
-        name: Preț Maxim Azi
-        icon: mdi:arrow-up-bold-circle-outline
-      - entity: sensor.pzu_pret_mediu_azi
-        name: Preț Mediu Azi
-        icon: mdi:calculator
+      - sensor.pzu_pret_minim_azi
+      - sensor.pzu_pret_maxim_azi
+      - sensor.pzu_pret_mediu_azi
       - type: attribute
         entity: sensor.pzu_strategie_baterie
         attribute: prag_incarcare
-        name: Prag Încărcare (<=)
-        icon: mdi:battery-charging-100
+        name: Prag încărcare
       - type: attribute
         entity: sensor.pzu_strategie_baterie
         attribute: prag_vanzare
-        name: Prag Vânzare / Descărcare (>=)
-        icon: mdi:battery-arrow-down
+        name: Prag vânzare
 ```
+
+## Date și disponibilitate
+
+Datele sunt actualizate în fusul orar `Europe/Bucharest`. Erorile de rețea nu sunt transformate în prețul zero: integrarea păstrează ultima citire validă, iar entitățile devin indisponibile numai dacă nu există deloc date valide.
+
+Sursa datelor: [OPCOM – Rezultate PZU RO](https://www.opcom.ro/grafice-ip-raportPIP-si-volumTranzactionat/ro).
+
+## Actualizare
+
+Actualizările se instalează din **HACS → PZU OPCOM → Update**. După actualizare, repornește Home Assistant.
+
+## Licență
+
+Distribuit sub licența [MIT](LICENSE).
