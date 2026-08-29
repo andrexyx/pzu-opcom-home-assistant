@@ -4,12 +4,20 @@ from __future__ import annotations
 import asyncio
 import csv
 from datetime import date, datetime, timedelta
+from html.parser import HTMLParser
 from io import StringIO
 import logging
 from statistics import fmean
 from typing import Any
 
-from aiohttp import ClientError, ClientResponseError, CookieJar
+from aiohttp import (
+    ClientConnectorCertificateError,
+    ClientConnectorSSLError,
+    ClientError,
+    ClientResponseError,
+    ClientTimeout,
+    CookieJar,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.event import async_track_time_interval
@@ -17,7 +25,7 @@ from homeassistant.util import dt as dt_util
 
 DOMAIN = "pzu_opcom"
 
-TIME_ZONE = "Europe/Bucharest"
+TIME_ZONE = "Europe/Berlin"
 SCAN_INTERVAL = timedelta(minutes=30)
 
 SOURCE_URL = (
@@ -208,6 +216,79 @@ def _parse_csv(payload: str) -> list[float]:
     ]
 
 
+class _OpcomTableParser(HTMLParser):
+    """Collect rows and cells from OPCOM HTML tables."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tables: list[list[list[str]]] = []
+        self._table: list[list[str]] | None = None
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        """Start collecting table cells."""
+        if tag == "table":
+            self._table = []
+        elif tag == "tr" and self._table is not None:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_data(self, data: str) -> None:
+        """Collect text from the current table cell."""
+        if self._cell is not None:
+            self._cell.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        """Finish the current cell, row, or table."""
+        if tag in ("td", "th") and self._cell is not None:
+            assert self._row is not None
+            self._row.append(" ".join(self._cell).strip())
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            assert self._table is not None
+            if any(self._row):
+                self._table.append(self._row)
+            self._row = None
+        elif tag == "table" and self._table is not None:
+            if self._table:
+                self.tables.append(self._table)
+            self._table = None
+
+
+def _parse_html_60min(payload: str) -> list[float]:
+    """Extract the official 60-minute price table from the OPCOM page."""
+    parser = _OpcomTableParser()
+    parser.feed(payload)
+
+    for table in parser.tables:
+        header = " ".join(table[0]).casefold()
+        if "60 min" not in header or "lei/mwh" not in header:
+            continue
+
+        prices_mwh: list[float] = []
+        for row in table[1:]:
+            if len(row) < 2:
+                continue
+            try:
+                interval = int(row[0].strip())
+                price = _decimal(row[1])
+            except ValueError:
+                continue
+            if interval == len(prices_mwh) + 1:
+                prices_mwh.append(price)
+
+        if len(prices_mwh) in (23, 24, 25):
+            return [price / 1000.0 for price in prices_mwh]
+
+    raise ValueError("OPCOM 60-minute price table was not found")
+
+
 class PzuRuntime:
     """Fetch OPCOM prices and publish stable HA states."""
 
@@ -220,6 +301,7 @@ class PzuRuntime:
         self.values: dict[str, Any] = {}
         self.attributes: dict[str, dict[str, Any]] = {}
         self.entities: list[Any] = []
+        self.tls_fallback_used = False
 
         self.session = async_create_clientsession(
             hass,
@@ -227,6 +309,58 @@ class PzuRuntime:
                 unsafe=True
             ),
         )
+
+    async def _request_text(
+        self,
+        url: str,
+        headers: dict[str, str],
+    ) -> str:
+        """Download text, retrying OPCOM only when TLS validation fails."""
+
+        async def _download(*, verify_tls: bool) -> str:
+            request_options: dict[str, Any] = {}
+            if not verify_tls:
+                request_options["ssl"] = False
+
+            async with self.session.get(
+                url,
+                headers=headers,
+                timeout=ClientTimeout(total=REQUEST_TIMEOUT),
+                **request_options,
+            ) as response:
+                payload = await response.text(errors="replace")
+
+                if response.status in RETRYABLE_STATUSES:
+                    raise ClientResponseError(
+                        response.request_info,
+                        response.history,
+                        status=response.status,
+                        message=(
+                            payload[:160]
+                            or response.reason
+                            or "OPCOM request blocked"
+                        ),
+                        headers=response.headers,
+                    )
+
+                response.raise_for_status()
+                return payload
+
+        try:
+            return await _download(verify_tls=True)
+        except (
+            ClientConnectorCertificateError,
+            ClientConnectorSSLError,
+        ) as err:
+            first_fallback = not self.tls_fallback_used
+            self.tls_fallback_used = True
+            log = _LOGGER.warning if first_fallback else _LOGGER.debug
+            log(
+                "OPCOM TLS validation failed (%s); retrying this public "
+                "OPCOM request without certificate verification",
+                err,
+            )
+            return await _download(verify_tls=False)
 
     async def _warmup_session(self) -> None:
         """
@@ -237,18 +371,10 @@ class PzuRuntime:
         """
 
         try:
-            async with self.session.get(
+            await self._request_text(
                 SOURCE_URL,
-                headers=WARMUP_HEADERS,
-                timeout=REQUEST_TIMEOUT,
-            ) as response:
-                await response.read()
-
-                if response.status >= 400:
-                    _LOGGER.debug(
-                        "OPCOM warm-up returned HTTP %s",
-                        response.status,
-                    )
+                WARMUP_HEADERS,
+            )
 
         except (
             ClientError,
@@ -280,38 +406,10 @@ class PzuRuntime:
             await self._warmup_session()
 
             try:
-                async with self.session.get(
+                payload = await self._request_text(
                     url,
-                    headers=BROWSER_HEADERS,
-                    timeout=REQUEST_TIMEOUT,
-                ) as response:
-
-                    if (
-                        response.status
-                        in RETRYABLE_STATUSES
-                    ):
-                        body = await response.text(
-                            errors="replace"
-                        )
-
-                        raise ClientResponseError(
-                            response.request_info,
-                            response.history,
-                            status=response.status,
-                            message=(
-                                body[:160]
-                                or response.reason
-                                or "OPCOM request blocked"
-                            ),
-                            headers=response.headers,
-                        )
-
-                    response.raise_for_status()
-
-                    payload = await response.text(
-                        encoding="utf-8",
-                        errors="replace",
-                    )
+                    BROWSER_HEADERS,
+                )
 
                 return _parse_csv(payload)
 
@@ -326,7 +424,7 @@ class PzuRuntime:
                     attempt
                     >= MAX_FETCH_ATTEMPTS
                 ):
-                    raise
+                    break
 
                 delay = float(attempt)
 
@@ -342,6 +440,29 @@ class PzuRuntime:
                 )
 
                 await asyncio.sleep(delay)
+
+        if target == _market_now().date():
+            try:
+                page = await self._request_text(
+                    SOURCE_URL,
+                    WARMUP_HEADERS,
+                )
+                prices = _parse_html_60min(page)
+                _LOGGER.info(
+                    "Using the OPCOM HTML 60-minute table after CSV failure"
+                )
+                return prices
+            except (
+                ClientError,
+                TimeoutError,
+                ValueError,
+            ) as fallback_error:
+                if last_error is not None:
+                    raise ValueError(
+                        f"CSV failed: {last_error}; HTML fallback failed: "
+                        f"{fallback_error}"
+                    ) from fallback_error
+                raise
 
         if last_error is not None:
             raise last_error
@@ -362,6 +483,7 @@ class PzuRuntime:
             "source": "OPCOM",
             "source_url": SOURCE_URL,
             "timezone": TIME_ZONE,
+            "tls_fallback_used": self.tls_fallback_used,
             "last_update": now.isoformat(),
             "stale": stale,
         }
@@ -645,3 +767,4 @@ async def _async_setup_runtime(
     )
 
     return True
+

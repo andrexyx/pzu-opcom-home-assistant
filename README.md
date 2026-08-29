@@ -111,7 +111,7 @@ cards:
 
 ## Date și disponibilitate
 
-Datele sunt actualizate în fusul orar `Europe/Bucharest`. Erorile de rețea nu sunt transformate în prețul zero: integrarea păstrează ultima citire validă, iar entitățile devin indisponibile numai dacă nu există deloc date valide.
+Intervalele OPCOM sunt selectate în fusul orar al pieței `Europe/Berlin` (CET/CEST), iar Home Assistant afișează entitățile în fusul orar configurat local. Erorile de rețea nu sunt transformate în prețul zero: integrarea păstrează ultima citire validă, iar entitățile devin indisponibile numai dacă nu există deloc date valide.
 
 Sursa datelor: [OPCOM – Rezultate PZU RO](https://www.opcom.ro/grafice-ip-raportPIP-si-volumTranzactionat/ro).
 
@@ -129,3 +129,4 @@ Mulțumiri tuturor celor care testează integrarea și contribuie cu feedback.
 ## Licență
 
 Distribuit sub licența [MIT](LICENSE).
+
