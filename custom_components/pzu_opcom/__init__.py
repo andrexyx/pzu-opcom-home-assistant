@@ -11,8 +11,6 @@ from statistics import fmean
 from typing import Any
 
 from aiohttp import (
-    ClientConnectorCertificateError,
-    ClientConnectorSSLError,
     ClientError,
     ClientResponseError,
     ClientTimeout,
@@ -301,10 +299,11 @@ class PzuRuntime:
         self.values: dict[str, Any] = {}
         self.attributes: dict[str, dict[str, Any]] = {}
         self.entities: list[Any] = []
-        self.tls_fallback_used = False
+        self.ssl_verification_disabled = True
 
         self.session = async_create_clientsession(
             hass,
+            verify_ssl=False,
             cookie_jar=CookieJar(
                 unsafe=True
             ),
@@ -315,52 +314,29 @@ class PzuRuntime:
         url: str,
         headers: dict[str, str],
     ) -> str:
-        """Download text, retrying OPCOM only when TLS validation fails."""
+        """Download text from OPCOM with retryable status handling."""
+        async with self.session.get(
+            url,
+            headers=headers,
+            timeout=ClientTimeout(total=REQUEST_TIMEOUT),
+        ) as response:
+            payload = await response.text(errors="replace")
 
-        async def _download(*, verify_tls: bool) -> str:
-            request_options: dict[str, Any] = {}
-            if not verify_tls:
-                request_options["ssl"] = False
+            if response.status in RETRYABLE_STATUSES:
+                raise ClientResponseError(
+                    response.request_info,
+                    response.history,
+                    status=response.status,
+                    message=(
+                        payload[:160]
+                        or response.reason
+                        or "OPCOM request blocked"
+                    ),
+                    headers=response.headers,
+                )
 
-            async with self.session.get(
-                url,
-                headers=headers,
-                timeout=ClientTimeout(total=REQUEST_TIMEOUT),
-                **request_options,
-            ) as response:
-                payload = await response.text(errors="replace")
-
-                if response.status in RETRYABLE_STATUSES:
-                    raise ClientResponseError(
-                        response.request_info,
-                        response.history,
-                        status=response.status,
-                        message=(
-                            payload[:160]
-                            or response.reason
-                            or "OPCOM request blocked"
-                        ),
-                        headers=response.headers,
-                    )
-
-                response.raise_for_status()
-                return payload
-
-        try:
-            return await _download(verify_tls=True)
-        except (
-            ClientConnectorCertificateError,
-            ClientConnectorSSLError,
-        ) as err:
-            first_fallback = not self.tls_fallback_used
-            self.tls_fallback_used = True
-            log = _LOGGER.warning if first_fallback else _LOGGER.debug
-            log(
-                "OPCOM TLS validation failed (%s); retrying this public "
-                "OPCOM request without certificate verification",
-                err,
-            )
-            return await _download(verify_tls=False)
+            response.raise_for_status()
+            return payload
 
     async def _warmup_session(self) -> None:
         """
@@ -483,7 +459,7 @@ class PzuRuntime:
             "source": "OPCOM",
             "source_url": SOURCE_URL,
             "timezone": TIME_ZONE,
-            "tls_fallback_used": self.tls_fallback_used,
+            "ssl_verification_disabled": self.ssl_verification_disabled,
             "last_update": now.isoformat(),
             "stale": stale,
         }
