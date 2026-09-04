@@ -4,20 +4,22 @@ from __future__ import annotations
 import asyncio
 import csv
 from datetime import date, datetime, timedelta
+from http.cookiejar import CookieJar
 from html.parser import HTMLParser
 from io import StringIO
 import logging
+import ssl
 from statistics import fmean
 from typing import Any
-
-from aiohttp import (
-    ClientError,
-    ClientResponseError,
-    ClientTimeout,
-    CookieJar,
+from urllib.error import HTTPError, URLError
+from urllib.request import (
+    HTTPCookieProcessor,
+    HTTPSHandler,
+    Request,
+    build_opener,
 )
+
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -40,15 +42,6 @@ CSV_URL = (
 
 REQUEST_TIMEOUT = 30
 MAX_FETCH_ATTEMPTS = 3
-
-RETRYABLE_STATUSES = {
-    403,
-    429,
-    500,
-    502,
-    503,
-    504,
-}
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -90,6 +83,10 @@ ENTITY_ICONS = {
 }
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class OpcomRequestError(Exception):
+    """Raised when OPCOM rejects or cannot complete a request."""
 
 
 def _market_now() -> datetime:
@@ -301,42 +298,60 @@ class PzuRuntime:
         self.entities: list[Any] = []
         self.ssl_verification_disabled = True
 
-        self.session = async_create_clientsession(
-            hass,
-            verify_ssl=False,
-            cookie_jar=CookieJar(
-                unsafe=True
+        self._opener = build_opener(
+            HTTPCookieProcessor(CookieJar()),
+            HTTPSHandler(
+                context=ssl._create_unverified_context()
             ),
         )
+
+    def _request_text_sync(
+        self,
+        url: str,
+        headers: dict[str, str],
+    ) -> str:
+        """Download OPCOM text with the standard-library HTTP client."""
+        request = Request(url, headers=headers)
+
+        try:
+            with self._opener.open(
+                request,
+                timeout=REQUEST_TIMEOUT,
+            ) as response:
+                payload = response.read()
+                charset = (
+                    response.headers.get_content_charset()
+                    or "utf-8"
+                )
+                return payload.decode(
+                    charset,
+                    errors="replace",
+                )
+        except HTTPError as err:
+            payload = err.read().decode(
+                "utf-8",
+                errors="replace",
+            )
+            raise OpcomRequestError(
+                f"HTTP {err.code}: "
+                f"{payload[:160] or err.reason}"
+            ) from err
+        except URLError as err:
+            raise OpcomRequestError(
+                str(err.reason)
+            ) from err
 
     async def _request_text(
         self,
         url: str,
         headers: dict[str, str],
     ) -> str:
-        """Download text from OPCOM with retryable status handling."""
-        async with self.session.get(
+        """Download OPCOM text without blocking Home Assistant."""
+        return await self.hass.async_add_executor_job(
+            self._request_text_sync,
             url,
-            headers=headers,
-            timeout=ClientTimeout(total=REQUEST_TIMEOUT),
-        ) as response:
-            payload = await response.text(errors="replace")
-
-            if response.status in RETRYABLE_STATUSES:
-                raise ClientResponseError(
-                    response.request_info,
-                    response.history,
-                    status=response.status,
-                    message=(
-                        payload[:160]
-                        or response.reason
-                        or "OPCOM request blocked"
-                    ),
-                    headers=response.headers,
-                )
-
-            response.raise_for_status()
-            return payload
+            headers,
+        )
 
     async def _warmup_session(self) -> None:
         """
@@ -353,7 +368,7 @@ class PzuRuntime:
             )
 
         except (
-            ClientError,
+            OpcomRequestError,
             TimeoutError,
         ) as err:
             _LOGGER.debug(
@@ -390,7 +405,7 @@ class PzuRuntime:
                 return _parse_csv(payload)
 
             except (
-                ClientError,
+                OpcomRequestError,
                 TimeoutError,
                 ValueError,
             ) as err:
@@ -429,7 +444,7 @@ class PzuRuntime:
                 )
                 return prices
             except (
-                ClientError,
+                OpcomRequestError,
                 TimeoutError,
                 ValueError,
             ) as fallback_error:
@@ -531,7 +546,7 @@ class PzuRuntime:
                     today_fresh = True
 
             except (
-                ClientError,
+                OpcomRequestError,
                 TimeoutError,
                 ValueError,
             ) as err:
