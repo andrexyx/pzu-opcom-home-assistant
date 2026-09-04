@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6
+
+- inlocuieste transportul `aiohttp` respins de OPCOM cu clientul HTTP standard Python, rulat in executorul Home Assistant;
+- pastreaza sesiunea cu cookie-uri, retry-ul CSV si fallback-ul HTML;
+- evita blocarea buclei asincrone Home Assistant in timpul cererilor OPCOM.
+
 ## 1.1.5
 
 - foloseste o sesiune dedicata OPCOM cu `verify_ssl=False`, pentru a evita variantele diferite de erori TLS din Home Assistant/aiohttp;
@@ -12,3 +18,4 @@
 - încearcă întotdeauna mai întâi conexiunea HTTPS validată și relaxează verificarea numai pentru cererile publice OPCOM care eșuează la validarea certificatului;
 - repară fallback-ul către tabelul HTML oficial după epuizarea încercărilor CSV;
 - aliniază intervalul curent la fusul orar al pieței OPCOM (`Europe/Berlin`).
+
